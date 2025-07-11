@@ -1,0 +1,4 @@
+<resources>
+
+    <style name="Theme.Asknon" parent="Theme.AppCompat.DayNight.NoActionBar" />
+</resources>
