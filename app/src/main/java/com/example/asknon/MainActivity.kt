@@ -1,47 +1,32 @@
 package com.example.asknon
 
+import android.content.Intent
 import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
-import com.example.asknon.ui.theme.AsknonTheme
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.card.MaterialCardView
 
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        setContent {
-            AsknonTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
-            }
+        setContentView(R.layout.activity_main)
+
+        Toast.makeText(this, "Bienvenido a Asknon", Toast.LENGTH_SHORT).show()
+
+        val cardAlumno = findViewById<MaterialCardView>(R.id.card_student)
+        val cardDocente = findViewById<MaterialCardView>(R.id.card_teacher)
+
+        cardAlumno.setOnClickListener {
+            val intent = Intent(this, JoinClassActivity::class.java)
+            intent.putExtra("rol", "alumno")
+            startActivity(intent)
         }
-    }
-}
 
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    AsknonTheme {
-        Greeting("Android")
+        cardDocente.setOnClickListener {
+            val intent = Intent(this, JoinClassActivity::class.java)
+            intent.putExtra("rol", "profesor")
+            startActivity(intent)
+        }
     }
 }

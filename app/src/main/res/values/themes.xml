@@ -1,5 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.Asknon" parent="Theme.MaterialComponents.DayNight.NoActionBar">
 
-    <style name="Theme.Asknon" parent="android:Theme.Material.Light.NoActionBar" />
+        <!-- Colores principales -->
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryVariant">@color/colorPrimaryVariant</item>
+        <item name="colorSecondary">@color/colorSecondary</item>
+
+        <!-- Fondo y superficie -->
+        <item name="android:windowBackground">@color/colorBackground</item>
+        <item name="colorSurface">@color/colorSurface</item>
+
+        <!-- Texto y contraste -->
+        <item name="colorOnPrimary">@color/colorOnPrimary</item>
+        <item name="colorOnBackground">@color/colorOnBackground</item>
+
+        <!-- Estilos visuales base -->
+        <item name="materialButtonStyle">@style/Widget.MaterialComponents.Button</item>
+        <item name="textInputStyle">@style/Widget.MaterialComponents.TextInputLayout.FilledBox</item>
+
+    </style>
 </resources>
