@@ -1,5 +1,6 @@
 plugins {
-    alias(libs.plugins.android.application)
+    id("com.android.application")
+    id("com.google.gms.google-services")
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
 }
@@ -40,6 +41,22 @@ android {
 }
 
 dependencies {
+
+    // Firebase BoM
+    implementation(platform("com.google.firebase:firebase-bom:34.0.0"))
+
+    //Dependencias de Firebase necesarias
+    implementation("com.google.firebase:firebase-analytics")
+    implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.firebase:firebase-firestore")
+    implementation("com.google.firebase:firebase-database:22.0.0")
+    implementation("com.google.firebase:firebase-storage")
+
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.ui:ui-test-junit4")
+
 
     implementation ("com.journeyapps:zxing-android-embedded:4.3.0")
     implementation ("com.google.android.material:material:1.11.0")
