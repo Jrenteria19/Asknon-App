@@ -1,19 +1,55 @@
 package com.example.asknon
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 
 class JoinClassActivity : AppCompatActivity() {
 
     private lateinit var auth: FirebaseAuth
     private lateinit var db: FirebaseFirestore
+
+    private lateinit var inputLayout: TextInputLayout
+    private lateinit var etCode: TextInputEditText
+    private lateinit var btnScanQR: MaterialButton
+    private lateinit var btnEnter: MaterialButton
+
+    // Contrato para solicitar permisos de cámara
+    private val requestCameraPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted: Boolean ->
+            if (isGranted) {
+                // Permiso concedido, iniciar el escaneo QR
+                startQrScan()
+            } else {
+                // Permiso denegado
+                Toast.makeText(this, "Permiso de cámara necesario para escanear QR", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+    // Contrato para recibir el resultado del escaneo QR
+    private val scanQrResultLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == RESULT_OK) {
+                val intent = result.data
+                // Aquí manejas el resultado del escaneo
+                // Puedes obtener los datos del código QR del intent
+                // Por ejemplo, si usas una librería que devuelve el resultado en el intent
+                // For ML Kit, you handle the result directly in the scanner's task listeners
+            }
+        }
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -22,10 +58,10 @@ class JoinClassActivity : AppCompatActivity() {
         auth = FirebaseAuth.getInstance()
         db = FirebaseFirestore.getInstance()
 
-        val inputLayout = findViewById<TextInputLayout>(R.id.text_input_layout)
-        val etCode = findViewById<TextInputEditText>(R.id.et_class_code)
-        val btnScanQR = findViewById<MaterialButton>(R.id.btn_scan_qr)
-        val btnEnter = findViewById<MaterialButton>(R.id.btn_enter)
+        inputLayout = findViewById(R.id.text_input_layout)
+        etCode = findViewById(R.id.et_class_code)
+        btnScanQR = findViewById(R.id.btn_scan_qr)
+        btnEnter = findViewById(R.id.btn_enter)
 
         // 🔹 Verificación de rol (seguridad redundante)
         verificarRol { rol ->
@@ -37,7 +73,18 @@ class JoinClassActivity : AppCompatActivity() {
 
             // 🔸 Lógica para alumnos
             btnScanQR.setOnClickListener {
-                Toast.makeText(this, "Escaneo QR aún no implementado", Toast.LENGTH_SHORT).show()
+                // Verificar y solicitar permiso de cámara si es necesario
+                if (ContextCompat.checkSelfPermission(
+                        this,
+                        Manifest.permission.CAMERA
+                    ) == PackageManager.PERMISSION_GRANTED
+                ) {
+                    // Permiso ya concedido, iniciar el escaneo QR
+                    startQrScan()
+                } else {
+                    // Solicitar permiso
+                    requestCameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                }
             }
 
             btnEnter.setOnClickListener {
@@ -79,6 +126,34 @@ class JoinClassActivity : AppCompatActivity() {
             }
     }
 
+    private fun startQrScan() {
+        val options = GmsBarcodeScannerOptions.Builder()
+            .setBarcodeFormats(com.google.mlkit.vision.barcode.common.Barcode.FORMAT_QR_CODE)
+            .build()
+
+        val scanner = GmsBarcodeScanning.getClient(this, options)
+
+        scanner.startScan()
+            .addOnSuccessListener { barcode ->
+                // Tarea completada con éxito, se encontró un código de barras
+                val rawValue = barcode.rawValue
+                // Aquí obtienes el valor del código QR (rawValue)
+                // Puedes colocar este valor en el campo de texto del código de clase
+                etCode.setText(rawValue)
+                // O directamente validar y unirse a la clase
+                // validarYUnirseAClase(rawValue.orEmpty())
+            }
+            .addOnCanceledListener {
+                // Tarea cancelada por el usuario
+                Toast.makeText(this, "Escaneo cancelado", Toast.LENGTH_SHORT).show()
+            }
+            .addOnFailureListener { e ->
+                // Tarea falló con una excepción
+                Toast.makeText(this, "Error al escanear: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+    }
+
+
     private fun validarYUnirseAClase(codigoClase: String) {
         db.collection("clases")
             .whereEqualTo("codigo", codigoClase)
@@ -99,7 +174,10 @@ class JoinClassActivity : AppCompatActivity() {
                             startActivity(Intent(this, StudentClassActivity::class.java).apply {
                                 putExtra("claseId", claseId)
                             })
-                                finish()
+                            finish()
+                        }
+                        .addOnFailureListener {
+                            Toast.makeText(this, "Error al unirse a la clase", Toast.LENGTH_SHORT).show()
                         }
                 }
             }

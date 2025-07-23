@@ -42,6 +42,9 @@ android {
 
 dependencies {
 
+    // Dependencia para escanear códigos de barras con ML Kit
+    implementation("com.google.mlkit:barcode-scanning:18.3.0")
+
     // Firebase BoM
     implementation(platform("com.google.firebase:firebase-bom:34.0.0"))
 
