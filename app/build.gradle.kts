@@ -45,8 +45,19 @@ dependencies {
     // Dependencia para escanear códigos de barras con ML Kit
     implementation("com.google.mlkit:barcode-scanning:18.3.0")
 
+    // Librería para generar códigos QR
+    implementation("com.journeyapps:zxing-android-embedded:4.3.2")
+
     // Firebase BoM
     implementation(platform("com.google.firebase:firebase-bom:34.0.0"))
+
+    / Firebase Authentication y Firestore
+    implementation("com.google.firebase:firebase-auth-ktx")
+    implementation("com.google.firebase:firebase-firestore-ktx")
+
+    // Kotlin Coroutines (para usar async/await con tareas de Firebase)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.1")
 
     //Dependencias de Firebase necesarias
     implementation("com.google.firebase:firebase-analytics")
