@@ -52,8 +52,8 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:34.0.0"))
 
     / Firebase Authentication y Firestore
-    implementation("com.google.firebase:firebase-auth")
-    implementation("com.google.firebase:firebase-firestore")
+    implementation("com.google.firebase:firebase-auth-ktx")
+    implementation("com.google.firebase:firebase-firestore-ktx")
 
     // Kotlin Coroutines (para usar async/await con tareas de Firebase)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.1")
@@ -76,7 +76,7 @@ dependencies {
     implementation ("com.google.android.material:material:1.11.0")
 
     implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.lifecycle.runtime)
+    implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
