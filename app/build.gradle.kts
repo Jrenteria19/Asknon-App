@@ -52,6 +52,7 @@ dependencies {
     implementation("com.google.firebase:firebase-database:22.0.0")
     implementation("com.google.firebase:firebase-storage")
 
+    implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
