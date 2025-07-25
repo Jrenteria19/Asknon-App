@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/colorBackground"
+    android:padding="16dp">
+
+    <!-- Encabezado con QR y código -->
+    <LinearLayout
+        android:orientation="horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="12dp">
+
+        <ImageView
+            android:id="@+id/img_qr"
+            android:layout_width="100dp"
+            android:layout_height="100dp"
+            android:src="@drawable/qr"
+            android:contentDescription="Código QR"
+            android:layout_marginEnd="16dp" />
+
+        <TextView
+            android:id="@+id/tv_class_code"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Código: ABC123"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:textColor="@color/colorOnBackground" />
+    </LinearLayout>
+
+    <!-- Título de sección: pendientes -->
+    <TextView
+        android:text="Preguntas Pendientes"
+        android:textStyle="bold"
+        android:textSize="16sp"
+        android:textColor="@color/colorOnBackground"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="4dp" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_pending_questions"
+        android:layout_width="match_parent"
+        android:layout_height="140dp"
+        android:layout_marginBottom="12dp" />
+
+    <!-- Título de sección: aprobadas -->
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_project_tv"
+        style="@style/Widget.MaterialComponents.Button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:backgroundTint="@color/colorPrimary"
+        android:icon="@drawable/ic_cast"
+        android:text="Proyectar a TV"
+        android:textColor="@color/colorOnPrimary"
+        app:iconGravity="textStart"
+        app:iconPadding="12dp"
+        app:iconTint="@color/colorOnPrimary" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_delete_class"
+        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Eliminar Clase"
+        android:textColor="@color/colorOnPrimary"
+        app:strokeColor="@color/Black"
+        android:backgroundTint="@color/Red"/>
+
+    <TextView
+        android:text="Preguntas Aprobadas"
+        android:textStyle="bold"
+        android:textSize="16sp"
+        android:textColor="@color/colorOnBackground"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="4dp" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_approved_questions"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <!-- Botón de proyectar -->
+
+</LinearLayout>

@@ -40,6 +40,12 @@ android {
 
 dependencies {
 
+    implementation ("androidx.core:core-ktx:1.12.0")
+    implementation ("androidx.wear:wear:1.3.0")
+    implementation ("androidx.wear.tiles:tiles-material:1.2.0")
+    implementation ("androidx.appcompat:appcompat:1.6.1")
+
+
     implementation(libs.play.services.wearable)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
@@ -50,6 +56,8 @@ dependencies {
     implementation(libs.androidx.wear.tooling.preview)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.core.splashscreen)
+    implementation(libs.appcompat)
+    implementation(libs.androidx.wear)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)

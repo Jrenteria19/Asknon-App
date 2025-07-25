@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">AsknonTV</string>
+    <string name="title_activity_projection">ProjectionActivity</string>
 </resources>

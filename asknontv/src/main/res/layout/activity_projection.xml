@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/layout_projection"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:background="@color/colorBackground"
+    android:padding="48dp">
+
+    <!-- Ícono representativo -->
+    <ImageView
+        android:id="@+id/iv_icon"
+        android:layout_width="120dp"
+        android:layout_height="120dp"
+        android:src="@drawable/ic_question"
+        android:contentDescription="@string/app_name"
+        android:layout_marginBottom="32dp"
+        app:tint="@color/colorPrimary" />
+
+    <!-- Pregunta proyectada -->
+    <TextView
+        android:id="@+id/tv_pregunta_proyectada"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Pregunta aquí"
+        android:textSize="32sp"
+        android:textColor="@color/colorPrimary"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:paddingBottom="24dp" />
+
+    <!-- Respuesta -->
+    <TextView
+        android:id="@+id/tv_respuesta_proyectada"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Respuesta..."
+        android:textSize="24sp"
+        android:textColor="@color/colorOnBackground"
+        android:gravity="center"
+        android:textAlignment="center" />
+
+</LinearLayout>
