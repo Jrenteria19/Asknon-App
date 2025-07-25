@@ -66,6 +66,17 @@
         app:iconPadding="12dp"
         app:iconTint="@color/colorOnPrimary" />
 
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_delete_class"
+        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Eliminar Clase"
+        android:textColor="@color/colorOnPrimary"
+        app:strokeColor="@color/Black"
+        android:backgroundTint="@color/Red"/>
+
     <TextView
         android:text="Preguntas Aprobadas"
         android:textStyle="bold"

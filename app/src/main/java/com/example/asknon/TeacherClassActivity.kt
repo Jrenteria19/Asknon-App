@@ -1,127 +1,334 @@
 package com.example.asknon
 
+import android.graphics.Bitmap
+import android.graphics.Color
 import android.os.Bundle
 import android.widget.*
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.WriterException
+import com.google.zxing.qrcode.QRCodeWriter
+import java.util.*
 
-// Data class que representa una pregunta con una posible respuesta
-// Esta estructura permite mostrar tanto la pregunta como la respuesta aprobada
-data class Pregunta(val texto: String, val respuesta: String?)
+data class Pregunta(
+    val id: String = "",
+    val texto: String = "",
+    val respuesta: String? = null,
+    val estado: String = "pendiente", // "pendiente", "aprobada", "rechazada"
+    val claseId: String = "",
+    val estudianteId: String = "",
+    val fechaCreacion: Date = Date()
+)
 
 class TeacherClassActivity : AppCompatActivity() {
 
     // Elementos de UI
     private lateinit var tvClassCode: TextView
+    private lateinit var imgQr: ImageView
     private lateinit var rvPending: RecyclerView
     private lateinit var rvApproved: RecyclerView
     private lateinit var btnProject: Button
+    private lateinit var btnDeleteClass: Button
 
-    // Adaptadores para listas
+    // Firebase
+    private val auth = FirebaseAuth.getInstance()
+    private val db = FirebaseFirestore.getInstance()
+    private var classListener: ListenerRegistration? = null
+    private var questionsListener: ListenerRegistration? = null
+
+    // Datos
+    private var currentClassId: String = ""
+    // Datos
+    private val pendingQuestions = mutableListOf<Pregunta>()
+    private val approvedQuestions = mutableListOf<Pregunta>()
+    // Adaptadores
     private lateinit var pendingAdapter: QuestionActionAdapter
     private lateinit var approvedAdapter: PreguntaAdapter
-
-    // Listas de preguntas
-    private val pendingList = mutableListOf(
-        "¿Qué entra en el examen?",
-        "¿Cuándo entregamos?",
-        "¿Podemos usar calculadora?"
-    )
-    private val approvedList = mutableListOf<Pregunta>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_class_teacher)
 
-        // Vincular vistas del layout
+        initViews()
+        setupAdapters()
+        checkExistingClass()
+    }
+
+    private fun initViews() {
         tvClassCode = findViewById(R.id.tv_class_code)
+        imgQr = findViewById(R.id.img_qr)
         rvPending = findViewById(R.id.rv_pending_questions)
         rvApproved = findViewById(R.id.rv_approved_questions)
         btnProject = findViewById(R.id.btn_project_tv)
+        btnDeleteClass = findViewById(R.id.btn_delete_class)
 
-        // Generar código aleatorio para la clase
-        tvClassCode.text = "Código: ${generarCodigoClase()}"
+        btnProject.setOnClickListener { projectFirstQuestion() }
+        btnDeleteClass.setOnClickListener { showDeleteClassConfirmation() }
+    }
 
-        // Adaptador con acciones para cada pregunta pendiente
+    private fun setupAdapters() {
         pendingAdapter = QuestionActionAdapter(
-            items = pendingList,
-            onApprove = { question ->
-                // Agrega pregunta aprobada sin respuesta
-                approvedList.add(0, Pregunta(question, null))
-                pendingList.remove(question)
-                refreshAdapters()
-                Toast.makeText(this, "✅ Pregunta aprobada", Toast.LENGTH_SHORT).show()
-            },
-            onAnswer = { question ->
-                // Lanza diálogo para responder la pregunta
-                mostrarDialogoResponder(question)
-            },
-            onReject = { question ->
-                // Elimina pregunta de la lista
-                pendingList.remove(question)
-                refreshAdapters()
-                Toast.makeText(this, "❌ Pregunta rechazada", Toast.LENGTH_SHORT).show()
-            }
+            items = pendingQuestions,
+            onApprove = { question -> approveQuestion(question) },
+            onAnswer = { question -> showAnswerDialog(question) },
+            onReject = { question -> rejectQuestion(question) }
         )
 
-        // Adaptador para preguntas aprobadas con respuestas
-        approvedAdapter = PreguntaAdapter(approvedList)
+        approvedAdapter = PreguntaAdapter(approvedQuestions) { question ->
+            deleteAnsweredQuestion(question)
+        }
 
-        // Configurar RecyclerView de pendientes
-        rvPending.layoutManager = LinearLayoutManager(this)
-        rvPending.adapter = pendingAdapter
+        rvPending.apply {
+            layoutManager = LinearLayoutManager(this@TeacherClassActivity)
+            adapter = pendingAdapter
+        }
 
-        // Configurar RecyclerView de aprobadas
-        rvApproved.layoutManager = LinearLayoutManager(this)
-        rvApproved.adapter = approvedAdapter
-
-        // Acción para botón de proyectar
-        btnProject.setOnClickListener {
-            if (approvedList.isNotEmpty()) {
-                val pregunta = approvedList.first()
-                Toast.makeText(this, "📺 Proyectando: \"${pregunta.texto}\"", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(this, "⚠️ No hay preguntas aprobadas", Toast.LENGTH_SHORT).show()
-            }
+        rvApproved.apply {
+            layoutManager = LinearLayoutManager(this@TeacherClassActivity)
+            adapter = approvedAdapter
         }
     }
 
-    // Muestra un AlertDialog para ingresar respuesta a una pregunta
-    private fun mostrarDialogoResponder(preguntaTexto: String) {
+    private fun checkExistingClass() {
+        val userId = auth.currentUser?.uid ?: run {
+            finish()
+            return
+        }
+
+        db.collection("clases")
+            .whereEqualTo("profesorId", userId)
+            .limit(1)
+            .get()
+            .addOnSuccessListener { snapshot ->
+                if (snapshot.isEmpty) {
+                    createNewClass(userId)
+                } else {
+                    val clase = snapshot.documents[0]
+                    currentClassId = clase.id
+                    setupClassInfo(clase.getString("codigo") ?: "", clase.getString("qrCode") ?: "")
+                    setupQuestionsListener()
+                }
+            }
+            .addOnFailureListener {
+                Toast.makeText(this, "Error al verificar clases", Toast.LENGTH_SHORT).show()
+                finish()
+            }
+    }
+
+    private fun createNewClass(profesorId: String) {
+        val classId = UUID.randomUUID().toString()
+        val classCode = generateUniqueClassCode()
+        val qrContent = "ASK_NON_CLASS_$classId"
+
+        val nuevaClase = hashMapOf(
+            "codigo" to classCode,
+            "qrCode" to qrContent,
+            "profesorId" to profesorId,
+            "fechaCreacion" to Calendar.getInstance().time
+        )
+
+        db.collection("clases").document(classId)
+            .set(nuevaClase)
+            .addOnSuccessListener {
+                currentClassId = classId
+                setupClassInfo(classCode, qrContent)
+                setupQuestionsListener()
+                Toast.makeText(this, "Clase creada exitosamente", Toast.LENGTH_SHORT).show()
+            }
+            .addOnFailureListener {
+                Toast.makeText(this, "Error al crear clase", Toast.LENGTH_SHORT).show()
+                finish()
+            }
+    }
+
+    private fun setupClassInfo(classCode: String, qrContent: String) {
+        tvClassCode.text = "Código: $classCode"
+        generateQrImage(qrContent)
+    }
+
+    private fun generateQrImage(content: String) {
+        try {
+            val writer = QRCodeWriter()
+            val bitMatrix = writer.encode(content, BarcodeFormat.QR_CODE, 512, 512)
+            val width = bitMatrix.width
+            val height = bitMatrix.height
+            val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
+
+            for (x in 0 until width) {
+                for (y in 0 until height) {
+                    bmp.setPixel(x, y, if (bitMatrix[x, y]) Color.BLACK else Color.WHITE)
+                }
+            }
+
+            imgQr.setImageBitmap(bmp)
+        } catch (e: WriterException) {
+            Toast.makeText(this, "Error al generar QR", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun setupQuestionsListener() {
+        questionsListener = db.collection("preguntas")
+            .whereEqualTo("claseId", currentClassId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Toast.makeText(this, "Error al cargar preguntas", Toast.LENGTH_SHORT).show()
+                    return@addSnapshotListener
+                }
+
+                val newPendingQuestions = mutableListOf<Pregunta>()
+                val newApprovedQuestions = mutableListOf<Pregunta>()
+
+                snapshot?.documents?.forEach { doc ->
+                    // 1. Deserializa el documento a un objeto Pregunta base
+                    val preguntaData = doc.toObject(Pregunta::class.java)
+
+                    if (preguntaData != null) {
+                        // 2. Crea una nueva instancia de Pregunta usando copy() para asignar el id correctamente
+                        val preguntaConIdCorrecto = preguntaData.copy(id = doc.id)
+
+                        when (preguntaConIdCorrecto.estado) {
+                            "pendiente" -> newPendingQuestions.add(preguntaConIdCorrecto)
+                            "aprobada" -> newApprovedQuestions.add(preguntaConIdCorrecto)
+                        }
+                    }
+                }
+
+                // Actualizar los adaptadores con los nuevos datos
+                pendingAdapter.updateData(newPendingQuestions)
+                approvedAdapter.updateData(newApprovedQuestions)
+            }
+    }
+
+    private fun generateUniqueClassCode(): String {
+        val chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+        return (1..6).map { chars.random() }.joinToString("")
+    }
+
+    private fun approveQuestion(pregunta: Pregunta) {
+        db.collection("preguntas").document(pregunta.id)
+            .update("estado", "aprobada")
+            .addOnSuccessListener {
+                Toast.makeText(this, "Pregunta aprobada", Toast.LENGTH_SHORT).show()
+            }
+            .addOnFailureListener {
+                Toast.makeText(this, "Error al aprobar pregunta", Toast.LENGTH_SHORT).show()
+            }
+    }
+
+    private fun rejectQuestion(pregunta: Pregunta) {
+        db.collection("preguntas").document(pregunta.id)
+            .delete()
+            .addOnSuccessListener {
+                Toast.makeText(this, "Pregunta rechazada", Toast.LENGTH_SHORT).show()
+            }
+            .addOnFailureListener {
+                Toast.makeText(this, "Error al rechazar pregunta", Toast.LENGTH_SHORT).show()
+            }
+    }
+
+    private fun showAnswerDialog(pregunta: Pregunta) {
         val input = EditText(this).apply {
             hint = "Escribe tu respuesta"
         }
 
         AlertDialog.Builder(this)
             .setTitle("Responder pregunta")
-            .setMessage(preguntaTexto)
+            .setMessage(pregunta.texto)
             .setView(input)
             .setPositiveButton("Guardar") { _, _ ->
                 val respuesta = input.text.toString().trim()
                 if (respuesta.isNotEmpty()) {
-                    approvedList.add(0, Pregunta(preguntaTexto, respuesta))
-                    pendingList.remove(preguntaTexto)
-                    refreshAdapters()
-                    Toast.makeText(this, "💬 Respuesta guardada", Toast.LENGTH_SHORT).show()
+                    answerQuestion(pregunta, respuesta)
                 } else {
-                    Toast.makeText(this, "⚠️ Respuesta vacía", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "La respuesta no puede estar vacía", Toast.LENGTH_SHORT).show()
                 }
             }
             .setNegativeButton("Cancelar", null)
             .show()
     }
 
-    // Refresca ambos adaptadores de preguntas
-    private fun refreshAdapters() {
-        pendingAdapter.notifyDataSetChanged()
-        approvedAdapter.notifyDataSetChanged()
+    private fun answerQuestion(pregunta: Pregunta, respuesta: String) {
+        db.collection("preguntas").document(pregunta.id)
+            .update(mapOf(
+                "estado" to "aprobada",
+                "respuesta" to respuesta
+            ))
+            .addOnSuccessListener {
+                Toast.makeText(this, "Respuesta guardada", Toast.LENGTH_SHORT).show()
+            }
+            .addOnFailureListener {
+                Toast.makeText(this, "Error al guardar respuesta", Toast.LENGTH_SHORT).show()
+            }
     }
 
-    // Genera un código aleatorio de 6 caracteres para la clase
-    private fun generarCodigoClase(): String {
-        val chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-        return (1..6).map { chars.random() }.joinToString("")
+    private fun deleteAnsweredQuestion(pregunta: Pregunta) {
+        db.collection("preguntas").document(pregunta.id)
+            .delete()
+            .addOnSuccessListener {
+                Toast.makeText(this, "Pregunta eliminada", Toast.LENGTH_SHORT).show()
+            }
+            .addOnFailureListener {
+                Toast.makeText(this, "Error al eliminar pregunta", Toast.LENGTH_SHORT).show()
+            }
+    }
+
+    private fun projectFirstQuestion() {
+        if (approvedQuestions.isNotEmpty()) {
+            val pregunta = approvedQuestions.first()
+            // Aquí implementar la lógica para proyectar en TV
+            Toast.makeText(this, "Proyectando: ${pregunta.texto}", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(this, "No hay preguntas aprobadas", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun showDeleteClassConfirmation() {
+        AlertDialog.Builder(this)
+            .setTitle("Eliminar clase")
+            .setMessage("¿Estás seguro de que quieres eliminar esta clase? Esta acción no se puede deshacer.")
+            .setPositiveButton("Eliminar") { _, _ ->
+                deleteClass()
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun deleteClass() {
+        // Primero eliminamos todas las preguntas asociadas
+        db.collection("preguntas")
+            .whereEqualTo("claseId", currentClassId)
+            .get()
+            .addOnSuccessListener { snapshot ->
+                val batch = db.batch()
+                snapshot.documents.forEach { doc ->
+                    batch.delete(doc.reference)
+                }
+
+                batch.commit()
+                    .addOnSuccessListener {
+                        // Luego eliminamos la clase
+                        db.collection("clases").document(currentClassId)
+                            .delete()
+                            .addOnSuccessListener {
+                                Toast.makeText(this, "Clase eliminada", Toast.LENGTH_SHORT).show()
+                                finish()
+                            }
+                    }
+            }
+            .addOnFailureListener {
+                Toast.makeText(this, "Error al eliminar preguntas", Toast.LENGTH_SHORT).show()
+            }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        classListener?.remove()
+        questionsListener?.remove()
     }
 }

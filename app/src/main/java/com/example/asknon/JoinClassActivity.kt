@@ -123,24 +123,30 @@ class JoinClassActivity : AppCompatActivity() {
         Toast.makeText(this, "Validando código de clase...", Toast.LENGTH_SHORT).show()
 
         db.collection("clases")
-            .whereEqualTo("codigo", codigoClase)
-            .limit(1)
+            .whereEqualTo("codigo", codigoClase) // Busca por el campo "codigo"
+            .limit(1) // Solo necesitamos una clase
             .get()
             .addOnSuccessListener { querySnapshot ->
                 if (querySnapshot.isEmpty) {
+                    // No se encontró ninguna clase con ese código
                     Toast.makeText(this, "La clase no existe o el código es incorrecto", Toast.LENGTH_LONG).show()
                     inputLayout.error = "Código inválido"
                 } else {
+                    // Se encontró la clase, obtenemos su ID de documento
                     val claseDoc = querySnapshot.documents[0]
-                    if (claseDoc.exists()) {
-                        unirseAClase(claseDoc.id)
+                    val claseId = claseDoc.id // ¡Aquí obtenemos el ID del documento de Firestore!
+
+                    // Asegúrate de que claseId no esté vacío antes de continuar
+                    if (claseId.isNotEmpty()) {
+                        unirseAClase(claseId)
                     } else {
-                        Toast.makeText(this, "Error al acceder a los datos de la clase", Toast.LENGTH_SHORT).show()
+                        // Esto no debería ocurrir si claseDoc.exists() es true, pero es una buena verificación.
+                        Toast.makeText(this, "Error: No se pudo obtener el ID de la clase.", Toast.LENGTH_SHORT).show()
                     }
                 }
             }
-            .addOnFailureListener {
-                Toast.makeText(this, "Error al conectar con la base de datos", Toast.LENGTH_SHORT).show()
+            .addOnFailureListener { e -> // Agrega 'e' para ver el error específico
+                Toast.makeText(this, "Error al conectar con la base de datos: ${e.message}", Toast.LENGTH_SHORT).show()
             }
     }
 
@@ -151,17 +157,20 @@ class JoinClassActivity : AppCompatActivity() {
         }
 
         db.collection("users").document(userId)
-            .update("claseId", claseId)
+            .update("claseId", claseId) // Actualiza el campo "claseId" del usuario
             .addOnSuccessListener {
                 Toast.makeText(this, "Te has unido a la clase exitosamente", Toast.LENGTH_SHORT).show()
-                startActivity(Intent(this, StudentClassActivity::class.java).apply {
-                    putExtra("claseId", claseId)
+
+                // Lanza StudentClassActivity pasando el ID de la clase
+                val intent = Intent(this, StudentClassActivity::class.java).apply {
+                    putExtra("CLASS_ID", claseId) // Usa "CLASS_ID" como clave, en mayúsculas para consistencia
                     flags = Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NEW_TASK
-                })
+                }
+                startActivity(intent)
                 finish()
             }
-            .addOnFailureListener {
-                Toast.makeText(this, "Error al unirse a la clase", Toast.LENGTH_SHORT).show()
+            .addOnFailureListener { e -> // Agrega 'e' para ver el error específico
+                Toast.makeText(this, "Error al unirse a la clase: ${e.message}", Toast.LENGTH_SHORT).show()
             }
     }
 }
