@@ -1,6 +1,7 @@
 package com.example.asknon
 
 import android.graphics.Bitmap
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.widget.*
@@ -277,12 +278,23 @@ class TeacherClassActivity : AppCompatActivity() {
                 Toast.makeText(this, "Error al eliminar pregunta", Toast.LENGTH_SHORT).show()
             }
     }
-
     private fun projectFirstQuestion() {
         if (approvedQuestions.isNotEmpty()) {
             val pregunta = approvedQuestions.first()
-            // Aquí implementar la lógica para proyectar en TV
-            Toast.makeText(this, "Proyectando: ${pregunta.texto}", Toast.LENGTH_SHORT).show()
+
+            // Lanzar la app de TV con el CLASS_ID
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setClassName("com.example.asknontv", "com.example.asknontv.ProjectionActivity")
+                putExtra("CLASS_ID", currentClassId) // Pasar el CLASS_ID
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+
+            try {
+                startActivity(intent)
+                Toast.makeText(this, "Proyectando en TV", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(this, "Instala la app de TV para proyectar", Toast.LENGTH_LONG).show()
+            }
         } else {
             Toast.makeText(this, "No hay preguntas aprobadas", Toast.LENGTH_SHORT).show()
         }
