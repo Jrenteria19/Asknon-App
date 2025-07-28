@@ -174,36 +174,73 @@ class TeacherClassActivity : AppCompatActivity() {
     }
 
     private fun setupQuestionsListener() {
-        questionsListener = db.collection("preguntas")
-            .whereEqualTo("claseId", currentClassId)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    Toast.makeText(this, "Error al cargar preguntas", Toast.LENGTH_SHORT).show()
-                    return@addSnapshotListener
-                }
+    questionsListener = db.collection("preguntas")
+        .whereEqualTo("claseId", currentClassId)
+        .addSnapshotListener { snapshot, error ->
+            if (error != null) return@addSnapshotListener
 
-                val newPendingQuestions = mutableListOf<Pregunta>()
-                val newApprovedQuestions = mutableListOf<Pregunta>()
-
-                snapshot?.documents?.forEach { doc ->
-                    // 1. Deserializa el documento a un objeto Pregunta base
-                    val preguntaData = doc.toObject(Pregunta::class.java)
-
-                    if (preguntaData != null) {
-                        // 2. Crea una nueva instancia de Pregunta usando copy() para asignar el id correctamente
-                        val preguntaConIdCorrecto = preguntaData.copy(id = doc.id)
-
-                        when (preguntaConIdCorrecto.estado) {
-                            "pendiente" -> newPendingQuestions.add(preguntaConIdCorrecto)
-                            "aprobada" -> newApprovedQuestions.add(preguntaConIdCorrecto)
-                        }
+            snapshot?.documentChanges?.forEach { change ->
+                if (change.type == DocumentChange.Type.ADDED) {
+                    val pregunta = change.document.toObject(Pregunta::class.java)
+                    if (pregunta.estado == "pendiente") {
+                        sendNotificationToWear(pregunta.texto)
                     }
                 }
-
-                // Actualizar los adaptadores con los nuevos datos
-                pendingAdapter.updateData(newPendingQuestions)
-                approvedAdapter.updateData(newApprovedQuestions)
             }
+        }
+    }
+
+    private fun sendNotificationToWear(preguntaTexto: String) {
+    // Obtén el token del Wear OS (deberías tenerlo guardado en Firestore)
+    db.collection("dispositivos")
+        .whereEqualTo("usuarioId", auth.currentUser?.uid)
+        .limit(1)
+        .get()
+        .addOnSuccessListener { snapshot ->
+            if (!snapshot.isEmpty) {
+                val token = snapshot.documents[0].getString("tokenWear") ?: return@addOnSuccessListener
+                
+                // Envía la notificación usando FCM
+                val notification = hashMapOf(
+                    "to" to token,
+                    "data" to hashMapOf(
+                        "title" to "Nueva pregunta",
+                        "message" to preguntaTexto,
+                        "timestamp" to System.currentTimeMillis().toString()
+                    )
+                )
+
+                // Usa Retrofit o HttpURLConnection para enviar la notificación
+                sendFcmNotification(notification)
+            }
+        }
+    }
+
+    private fun sendFcmNotification(notification: HashMap<String, Any>) {
+        // Implementación rápida con Retrofit (necesitas agregar la dependencia)
+        val api = Retrofit.Builder()
+            .baseUrl("https://fcm.googleapis.com/")
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(FcmApi::class.java)
+
+        api.sendNotification(notification, "key=TU_SERVER_KEY_FCM")
+            .enqueue(object : Callback<ResponseBody> {
+                override fun onResponse(call: Call<ResponseBody>, response: Response<ResponseBody>) {
+                    Toast.makeText(this@TeacherClassActivity, "Notificación enviada a Wear OS", Toast.LENGTH_SHORT).show()
+                }
+                override fun onFailure(call: Call<ResponseBody>, t: Throwable) {
+                    Toast.makeText(this@TeacherClassActivity, "Error al enviar a Wear OS", Toast.LENGTH_SHORT).show()
+                }
+            })
+    }
+
+    interface FcmApi {
+        @POST("fcm/send")
+        fun sendNotification(
+            @Body notification: HashMap<String, Any>,
+            @Header("Authorization") auth: String
+        ): Call<ResponseBody>
     }
 
     private fun generateUniqueClassCode(): String {
@@ -312,31 +349,40 @@ class TeacherClassActivity : AppCompatActivity() {
     }
 
     private fun deleteClass() {
-        // Primero eliminamos todas las preguntas asociadas
-        db.collection("preguntas")
-            .whereEqualTo("claseId", currentClassId)
-            .get()
-            .addOnSuccessListener { snapshot ->
-                val batch = db.batch()
-                snapshot.documents.forEach { doc ->
-                    batch.delete(doc.reference)
-                }
+    // Primero eliminamos todas las preguntas asociadas
+    db.collection("preguntas")
+        .whereEqualTo("claseId", currentClassId)
+        .get()
+        .addOnSuccessListener { snapshot ->
+            val batch = db.batch()
+            snapshot.documents.forEach { doc ->
+                batch.delete(doc.reference)
+            }
 
-                batch.commit()
-                    .addOnSuccessListener {
-                        // Luego eliminamos la clase
-                        db.collection("clases").document(currentClassId)
-                            .delete()
-                            .addOnSuccessListener {
-                                Toast.makeText(this, "Clase eliminada", Toast.LENGTH_SHORT).show()
-                                finish()
+            batch.commit()
+                .addOnSuccessListener {
+                    // Luego eliminamos la clase
+                    db.collection("clases").document(currentClassId)
+                        .delete()
+                        .addOnSuccessListener {
+                            // Cerrar sesión
+                            FirebaseAuth.getInstance().signOut()
+                            
+                            // Redirigir al MainActivity limpiando el stack
+                            val intent = Intent(this, MainActivity::class.java).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
                             }
-                    }
-            }
-            .addOnFailureListener {
-                Toast.makeText(this, "Error al eliminar preguntas", Toast.LENGTH_SHORT).show()
-            }
-    }
+                            startActivity(intent)
+                            finish()
+                            
+                            Toast.makeText(this, "Clase eliminada y sesión cerrada", Toast.LENGTH_SHORT).show()
+                        }
+                }
+        }
+        .addOnFailureListener {
+            Toast.makeText(this, "Error al eliminar preguntas", Toast.LENGTH_SHORT).show()
+        }
+}
 
     override fun onDestroy() {
         super.onDestroy()
