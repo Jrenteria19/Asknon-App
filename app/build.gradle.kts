@@ -42,6 +42,8 @@ android {
 
 dependencies {
 
+    implementation("com.google.android.gms:play-services-wearable:18.1.0")
+
     // Firebase BoM
     implementation(platform("com.google.firebase:firebase-bom:34.0.0"))
 
