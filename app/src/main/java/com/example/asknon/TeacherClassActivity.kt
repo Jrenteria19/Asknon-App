@@ -38,7 +38,6 @@ data class Pregunta(
 )
 
 class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceivedListener {
-
     // Elementos de UI
     private lateinit var tvClassCode: TextView
     private lateinit var imgQr: ImageView
@@ -55,9 +54,11 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
 
     // Datos
     private var currentClassId: String = ""
+
     // Datos
     private val pendingQuestions = mutableListOf<Pregunta>()
     private val approvedQuestions = mutableListOf<Pregunta>()
+
     // Adaptadores
     private lateinit var pendingAdapter: QuestionActionAdapter
     private lateinit var approvedAdapter: PreguntaAdapter
@@ -69,6 +70,8 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
         // y en el archivo wear.xml de tu app móvil.
         private const val APPROVE_ALL_QUESTIONS_PATH = "/approve_all_questions"
         private const val WEAR_APP_CAPABILITY = "asknon_wear_app_capability"
+        // Constante para identificar si estamos en modo debug
+        private const val IS_DEBUG_MODE = true // Cambia a false para producción
     }
 
     override fun onResume() {
@@ -103,7 +106,6 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_class_teacher)
-
         initViews()
         setupAdapters()
         checkExistingClass()
@@ -116,7 +118,6 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
         rvApproved = findViewById(R.id.rv_approved_questions)
         btnProject = findViewById(R.id.btn_project_tv)
         btnDeleteClass = findViewById(R.id.btn_delete_class)
-
         btnProject.setOnClickListener { projectFirstQuestion() }
         btnDeleteClass.setOnClickListener { showDeleteClassConfirmation() }
     }
@@ -128,16 +129,13 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
             onAnswer = { question -> showAnswerDialog(question) },
             onReject = { question -> rejectQuestion(question) }
         )
-
         approvedAdapter = PreguntaAdapter(approvedQuestions) { question ->
             deleteAnsweredQuestion(question)
         }
-
         rvPending.apply {
             layoutManager = LinearLayoutManager(this@TeacherClassActivity)
             adapter = pendingAdapter
         }
-
         rvApproved.apply {
             layoutManager = LinearLayoutManager(this@TeacherClassActivity)
             adapter = approvedAdapter
@@ -150,9 +148,7 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
             Log.w(TAG_MOBILE, "approveAll: currentClassId está vacío.")
             return
         }
-
         Log.d(TAG_MOBILE, "Intentando aprobar todas las preguntas pendientes para la clase: $currentClassId")
-
         db.collection("preguntas")
             .whereEqualTo("claseId", currentClassId)
             .whereEqualTo("estado", "pendiente") // Solo seleccionar las pendientes
@@ -166,13 +162,11 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
                     sendPendingQuestionsCountToWear(0)
                     return@addOnSuccessListener
                 }
-
                 val batch: WriteBatch = db.batch()
                 snapshot.documents.forEach { doc ->
                     Log.d(TAG_MOBILE, "Aprobando pregunta ID: ${doc.id}")
                     batch.update(doc.reference, "estado", "aprobada")
                 }
-
                 batch.commit()
                     .addOnSuccessListener {
                         Log.d(TAG_MOBILE, "Todas las preguntas pendientes (${snapshot.size()}) han sido aprobadas en Firestore.")
@@ -199,7 +193,6 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
             finish()
             return
         }
-
         db.collection("clases")
             .whereEqualTo("profesorId", userId)
             .limit(1)
@@ -224,14 +217,12 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
         val classId = UUID.randomUUID().toString()
         val classCode = generateUniqueClassCode()
         val qrContent = "ASK_NON_CLASS_$classId"
-
         val nuevaClase = hashMapOf(
             "codigo" to classCode,
             "qrCode" to qrContent,
             "profesorId" to profesorId,
             "fechaCreacion" to Calendar.getInstance().time
         )
-
         db.collection("clases").document(classId)
             .set(nuevaClase)
             .addOnSuccessListener {
@@ -247,7 +238,7 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
     }
 
     private fun setupClassInfo(classCode: String, qrContent: String) {
-        tvClassCode.text = "Código: $classCode"
+        tvClassCode.text = "Código: $classCode\nID: $currentClassId" // Mostrar también el ID
         generateQrImage(qrContent)
     }
 
@@ -258,13 +249,11 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
             val width = bitMatrix.width
             val height = bitMatrix.height
             val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
-
             for (x in 0 until width) {
                 for (y in 0 until height) {
                     bmp.setPixel(x, y, if (bitMatrix[x, y]) Color.BLACK else Color.WHITE)
                 }
             }
-
             imgQr.setImageBitmap(bmp)
         } catch (e: WriterException) {
             Toast.makeText(this, "Error al generar QR", Toast.LENGTH_SHORT).show()
@@ -273,7 +262,6 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
 
     private fun setupQuestionsListener() {
         if (currentClassId.isEmpty()) return // No escuchar si no hay clase
-
         questionsListener = db.collection("preguntas")
             .whereEqualTo("claseId", currentClassId)
             .addSnapshotListener { snapshot, error ->
@@ -282,10 +270,8 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
                     Toast.makeText(this, "Error al cargar preguntas", Toast.LENGTH_SHORT).show()
                     return@addSnapshotListener
                 }
-
                 val newPendingQuestions = mutableListOf<Pregunta>()
                 val newApprovedQuestions = mutableListOf<Pregunta>()
-
                 snapshot?.documents?.forEach { doc ->
                     val preguntaData = doc.toObject(Pregunta::class.java)
                     if (preguntaData != null) {
@@ -296,11 +282,9 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
                         }
                     }
                 }
-
                 // Actualizar los adaptadores con los nuevos datos
                 pendingAdapter.updateData(newPendingQuestions)
                 approvedAdapter.updateData(newApprovedQuestions)
-
                 // <<--- AQUÍ ES DONDE ENVIAREMOS LOS DATOS A WEAR OS --- >>
                 sendPendingQuestionsCountToWear(newPendingQuestions.size)
             }
@@ -324,11 +308,9 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
 
     private fun sendPendingQuestionsCountToWear(count: Int) {
         val messageData = count.toString().toByteArray(StandardCharsets.UTF_8)
-
         // Usar CapabilityClient para encontrar nodos que tengan tu app Wear OS instalada
         val capabilityInfoTask = com.google.android.gms.wearable.Wearable.getCapabilityClient(this)
             .getCapability(WEAR_APP_CAPABILITY, com.google.android.gms.wearable.CapabilityClient.FILTER_REACHABLE)
-
         capabilityInfoTask.addOnSuccessListener { capabilityInfo ->
             val connectedNodes = capabilityInfo.nodes
             if (connectedNodes.isEmpty()) {
@@ -370,7 +352,6 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
         val input = EditText(this).apply {
             hint = "Escribe tu respuesta"
         }
-
         AlertDialog.Builder(this)
             .setTitle("Responder pregunta")
             .setMessage(pregunta.texto)
@@ -411,25 +392,73 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
                 Toast.makeText(this, "Error al eliminar pregunta", Toast.LENGTH_SHORT).show()
             }
     }
+
     private fun projectFirstQuestion() {
         if (approvedQuestions.isNotEmpty()) {
-            val pregunta = approvedQuestions.first()
+            // Verificar que currentClassId no esté vacío
+            if (currentClassId.isEmpty()) {
+                Toast.makeText(this, "ID de clase no disponible", Toast.LENGTH_SHORT).show()
+                return
+            }
 
-            // Lanzar la app de TV con el CLASS_ID
+            // En lugar de intentar lanzar la app de TV, simplemente muestra un mensaje
+            // indicando que la TV debería estar conectada y escuchando.
+            Toast.makeText(
+                this,
+                "Pregunta aprobada. Asegúrate de que la TV esté conectada al código: $currentClassId",
+                Toast.LENGTH_LONG // Mensaje más largo para que se entienda
+            ).show()
+
+            // Opcional: Si quieres mantener la lógica de intento de lanzamiento como fallback:
+            /*
             val intent = Intent(Intent.ACTION_VIEW).apply {
                 setClassName("com.example.asknontv", "com.example.asknontv.ProjectionActivity")
-                putExtra("CLASS_ID", currentClassId) // Pasar el CLASS_ID
+                putExtra("CLASS_ID", currentClassId)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-
             try {
                 startActivity(intent)
-                Toast.makeText(this, "Proyectando en TV", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Intentando abrir la TV...", Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
-                Toast.makeText(this, "Instala la app de TV para proyectar", Toast.LENGTH_LONG).show()
+                Log.w(TAG_MOBILE, "No se pudo lanzar la app de TV automáticamente. Asumiendo que está abierta.", e)
+                Toast.makeText(
+                    this,
+                    "Asegúrate de que la TV esté conectada al código: $currentClassId",
+                    Toast.LENGTH_LONG
+                ).show()
             }
+            */
+
         } else {
             Toast.makeText(this, "No hay preguntas aprobadas", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun projectToTvForTesting() {
+        // Para pruebas en emulador
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setClassName("com.example.asknontv", "com.example.asknontv.ProjectionActivity")
+            putExtra("CLASS_ID", currentClassId)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+
+        // Para emulador, intenta lanzar aunque falle
+        try {
+            startActivity(intent)
+            Toast.makeText(this, "Proyectando en TV (emulador)", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            // Si falla, abre la app de TV de otra manera
+            val genericIntent = Intent().apply {
+                `package` = "com.example.asknontv"
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            try {
+                startActivity(genericIntent)
+                Toast.makeText(this, "App de TV abierta (verifica el CLASS_ID: $currentClassId)", Toast.LENGTH_LONG).show()
+            } catch (e2: Exception) {
+                Toast.makeText(this, "Instala la app de TV para proyectar. CLASS_ID: $currentClassId", Toast.LENGTH_LONG).show()
+                Log.e("TeacherClassActivity", "Error al lanzar app de TV", e)
+            }
         }
     }
 
@@ -449,7 +478,6 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
             Toast.makeText(this, "No hay clase para eliminar", Toast.LENGTH_SHORT).show()
             return
         }
-
         // Primero eliminamos todas las preguntas asociadas a la clase
         db.collection("preguntas")
             .whereEqualTo("claseId", currentClassId)
@@ -459,7 +487,6 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
                 questionsSnapshot.documents.forEach { doc ->
                     batch.delete(doc.reference)
                 }
-
                 batch.commit()
                     .addOnSuccessListener {
                         // Si la eliminación de preguntas fue exitosa (o no había preguntas),
@@ -485,7 +512,6 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
 
     private fun logoutAndGoToMain() {
         auth.signOut() // Cierra la sesión del usuario en Firebase Authentication
-
         // Crea un Intent para ir a MainActivity
         val intent = Intent(this, MainActivity::class.java).apply {
             // Estas flags limpian el stack de actividades para que el usuario
@@ -499,7 +525,6 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
 
     override fun onDestroy() {
         super.onDestroy()
-
         classListener?.remove()
         questionsListener?.remove()
     }
