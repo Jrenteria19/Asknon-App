@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "626497672382",
+    "project_id": "asknon-app",
+    "storage_bucket": "asknon-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:626497672382:android:c4765bf436c0e92052baef",
+        "android_client_info": {
+          "package_name": "com.example.asknon"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAkavzt7Ek15svBS6DY3hVfwRv-vtEoI-U"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:626497672382:android:tu_app_id_para_tv",
+        "android_client_info": {
+          "package_name": "com.example.asknontv"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAkavzt7Ek15svBS6DY3hVfwRv-vtEoI-U"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

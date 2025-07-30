@@ -2,6 +2,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -12,6 +19,15 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Asknon"
         tools:targetApi="31">
+
+        <!-- Actividad principal (con AppCompat-compatible theme) -->
+        <meta-data
+            android:name="com.google.android.wearable.standalone"
+            android:value="false" />
+        <meta-data
+            android:name="com.google.android.wearable.capabilities"
+            android:resource="@xml/wear" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -19,10 +35,14 @@
             android:theme="@style/Theme.Asknon">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Actividades internas -->
+        <activity android:name=".TeacherClassActivity" />
+        <activity android:name=".StudentClassActivity" />
+        <activity android:name=".JoinClassActivity" />
     </application>
 
 </manifest>
