@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">Asknon</string>
+
+    <string-array name="android_wear_capabilities">
+        <item>asknon_wear_app_capability</item> <!-- El nombre de tu capacidad -->
+    </string-array>
 </resources>

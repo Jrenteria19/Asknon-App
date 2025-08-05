@@ -1,47 +1,71 @@
 package com.example.asknon
 
+import android.content.Intent
 import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
-import com.example.asknon.ui.theme.AsknonTheme
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.card.MaterialCardView
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
+    private lateinit var auth: FirebaseAuth
+    private lateinit var db: FirebaseFirestore
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        setContent {
-            AsknonTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
-            }
+        setContentView(R.layout.activity_main)
+
+        auth = FirebaseAuth.getInstance()
+        db = FirebaseFirestore.getInstance()
+
+        if (auth.currentUser == null) {
+            iniciarSesionAnonimo()
+        } else {
+            verificarRolYRedirigir()
+        }
+
+        findViewById<MaterialCardView>(R.id.card_student).setOnClickListener {
+            guardarRolYRedirigir("alumno")
+        }
+
+        findViewById<MaterialCardView>(R.id.card_teacher).setOnClickListener {
+            guardarRolYRedirigir("profesor")
         }
     }
-}
 
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
+    private fun iniciarSesionAnonimo() {
+        auth.signInAnonymously().addOnSuccessListener {
+            Toast.makeText(this, "Sesión iniciada", Toast.LENGTH_SHORT).show()
+        }.addOnFailureListener {
+            Toast.makeText(this, "Error al iniciar sesión", Toast.LENGTH_SHORT).show()
+        }
+    }
 
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    AsknonTheme {
-        Greeting("Android")
+    private fun guardarRolYRedirigir(rol: String) {
+        val userId = auth.currentUser?.uid ?: return
+        db.collection("users").document(userId).set(mapOf("rol" to rol))
+            .addOnSuccessListener {
+                redirigirSegunRol(rol)
+            }
+    }
+
+    private fun verificarRolYRedirigir() {
+        val userId = auth.currentUser?.uid ?: return
+        db.collection("users").document(userId).get()
+            .addOnSuccessListener { doc ->
+                doc.getString("rol")?.let { rol ->
+                    redirigirSegunRol(rol)
+                }
+            }
+    }
+
+    private fun redirigirSegunRol(rol: String) {
+        val intent = when (rol) {
+            "profesor" -> Intent(this, TeacherClassActivity::class.java)
+            else -> Intent(this, JoinClassActivity::class.java) // Alumno va a JoinClass
+        }
+        startActivity(intent)
+        finish()
     }
 }
