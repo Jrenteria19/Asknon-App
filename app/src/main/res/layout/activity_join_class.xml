@@ -56,7 +56,7 @@
             android:textColor="@color/colorOnPrimary"
             android:icon="@drawable/ic_arrow_forward"
             app:iconGravity="textEnd"
-            app:iconPadding="12dp"
+            app:iconPadding="13dp"
             app:iconTint="@color/colorOnPrimary"
             style="@style/Widget.MaterialComponents.Button" />
 

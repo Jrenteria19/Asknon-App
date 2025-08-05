@@ -76,7 +76,7 @@
         android:textColor="@color/colorOnBackground"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="4dp" />
+        android:layout_marginBottom="5dp" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rv_approved_questions"
