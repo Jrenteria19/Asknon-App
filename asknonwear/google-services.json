@@ -15,7 +15,26 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyAkavzt7Ek15svBS6DY3hVfwRv-vtEoI-U"
+          "current_key": "AIzaSyAryStYnaW9tTJ2B0mRnz7foe5bk5Mmx9I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:626497672382:88efe14a-79c4-4607-a0e0-a8dee5be5895",
+        "android_client_info": {
+          "package_name": "com.example.asknonwear"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAryStYnaW9tTJ2B0mRnz7foe5bk5Mmx9I"
         }
       ],
       "services": {

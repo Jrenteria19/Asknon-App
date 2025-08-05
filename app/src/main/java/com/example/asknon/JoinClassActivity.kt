@@ -9,8 +9,6 @@ import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import com.journeyapps.barcodescanner.ScanContract
-import com.journeyapps.barcodescanner.ScanOptions
 
 class JoinClassActivity : AppCompatActivity() {
 
@@ -18,20 +16,6 @@ class JoinClassActivity : AppCompatActivity() {
     private lateinit var db: FirebaseFirestore
     private lateinit var etCode: TextInputEditText
     private lateinit var inputLayout: TextInputLayout
-
-    // Registra el lanzador de la actividad de escaneo
-    private val qrScannerLauncher = registerForActivityResult(ScanContract()) { result ->
-        if (result.contents != null) {
-            // Procesa el resultado del escaneo
-            val scannedCode = result.contents.trim()
-            etCode.setText(scannedCode)
-
-            // Validar automáticamente el código escaneado
-            validarYUnirseAClase(scannedCode)
-        } else {
-            Toast.makeText(this, "Escaneo de QR cancelado", Toast.LENGTH_SHORT).show()
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -42,8 +26,10 @@ class JoinClassActivity : AppCompatActivity() {
 
         inputLayout = findViewById(R.id.text_input_layout)
         etCode = findViewById(R.id.et_class_code)
-        val btnScanQR = findViewById<MaterialButton>(R.id.btn_scan_qr)
         val btnEnter = findViewById<MaterialButton>(R.id.btn_enter)
+
+        // Se elimina la referencia y la lógica del botón de escaneo QR
+        // val btnScanQR = findViewById<MaterialButton>(R.id.btn_scan_qr)
 
         verificarRol { rol ->
             if (rol == "profesor") {
@@ -52,30 +38,12 @@ class JoinClassActivity : AppCompatActivity() {
                 return@verificarRol
             }
 
-            // Configuración del botón de escaneo QR
-            btnScanQR.setOnClickListener {
-                iniciarEscaneoQR()
-            }
-
+            // El botón de entrar mantiene su funcionalidad
             btnEnter.setOnClickListener {
                 val code = etCode.text?.toString()?.trim().orEmpty()
                 validarCodigoAntesDeUnirse(code)
             }
         }
-    }
-
-    private fun iniciarEscaneoQR() {
-        val options = ScanOptions().apply {
-            setDesiredBarcodeFormats(ScanOptions.QR_CODE)
-            setPrompt("Escanea el código QR de la clase")
-            setCameraId(0) // Usa cámara trasera
-            setBeepEnabled(true)
-            setBarcodeImageEnabled(false)
-            setOrientationLocked(false)
-            setTimeout(15000) // 15 segundos de timeout
-        }
-
-        qrScannerLauncher.launch(options)
     }
 
     private fun validarCodigoAntesDeUnirse(code: String) {
@@ -119,33 +87,28 @@ class JoinClassActivity : AppCompatActivity() {
     }
 
     private fun validarYUnirseAClase(codigoClase: String) {
-        // Mostrar progreso
         Toast.makeText(this, "Validando código de clase...", Toast.LENGTH_SHORT).show()
 
         db.collection("clases")
-            .whereEqualTo("codigo", codigoClase) // Busca por el campo "codigo"
-            .limit(1) // Solo necesitamos una clase
+            .whereEqualTo("codigo", codigoClase.uppercase()) // Se busca por el código en mayúsculas para ser consistente
+            .limit(1)
             .get()
             .addOnSuccessListener { querySnapshot ->
                 if (querySnapshot.isEmpty) {
-                    // No se encontró ninguna clase con ese código
                     Toast.makeText(this, "La clase no existe o el código es incorrecto", Toast.LENGTH_LONG).show()
                     inputLayout.error = "Código inválido"
                 } else {
-                    // Se encontró la clase, obtenemos su ID de documento
                     val claseDoc = querySnapshot.documents[0]
-                    val claseId = claseDoc.id // ¡Aquí obtenemos el ID del documento de Firestore!
+                    val claseId = claseDoc.id
 
-                    // Asegúrate de que claseId no esté vacío antes de continuar
                     if (claseId.isNotEmpty()) {
                         unirseAClase(claseId)
                     } else {
-                        // Esto no debería ocurrir si claseDoc.exists() es true, pero es una buena verificación.
                         Toast.makeText(this, "Error: No se pudo obtener el ID de la clase.", Toast.LENGTH_SHORT).show()
                     }
                 }
             }
-            .addOnFailureListener { e -> // Agrega 'e' para ver el error específico
+            .addOnFailureListener { e ->
                 Toast.makeText(this, "Error al conectar con la base de datos: ${e.message}", Toast.LENGTH_SHORT).show()
             }
     }
@@ -157,19 +120,18 @@ class JoinClassActivity : AppCompatActivity() {
         }
 
         db.collection("users").document(userId)
-            .update("claseId", claseId) // Actualiza el campo "claseId" del usuario
+            .update("claseId", claseId)
             .addOnSuccessListener {
                 Toast.makeText(this, "Te has unido a la clase exitosamente", Toast.LENGTH_SHORT).show()
 
-                // Lanza StudentClassActivity pasando el ID de la clase
                 val intent = Intent(this, StudentClassActivity::class.java).apply {
-                    putExtra("CLASS_ID", claseId) // Usa "CLASS_ID" como clave, en mayúsculas para consistencia
+                    putExtra("CLASS_ID", claseId)
                     flags = Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NEW_TASK
                 }
                 startActivity(intent)
                 finish()
             }
-            .addOnFailureListener { e -> // Agrega 'e' para ver el error específico
+            .addOnFailureListener { e ->
                 Toast.makeText(this, "Error al unirse a la clase: ${e.message}", Toast.LENGTH_SHORT).show()
             }
     }

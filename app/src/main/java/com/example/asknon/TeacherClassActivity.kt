@@ -22,6 +22,11 @@ import com.google.firebase.firestore.WriteBatch
 import java.util.Calendar
 import java.util.Date
 import java.util.UUID
+import com.google.android.gms.wearable.Wearable
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 data class Pregunta(
     val id: String = "",
@@ -222,6 +227,14 @@ class TeacherClassActivity : AppCompatActivity() {
         tvClassCode.text = "Código: $classCode\nID: $currentClassId"
     }
 
+    private fun generateUniqueClassCode(): String {
+
+        val chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+        return (1..6).map { chars.random() }.joinToString("")
+
+    }
+
     private fun setupQuestionsListener() {
         if (currentClassId.isEmpty()) return
         questionsListener = db.collection("preguntas")
@@ -246,12 +259,36 @@ class TeacherClassActivity : AppCompatActivity() {
                 }
                 pendingAdapter.updateData(newPendingQuestions)
                 approvedAdapter.updateData(newApprovedQuestions)
+
+                sendPendingCountToWatch(newPendingQuestions.size)
+
             }
     }
 
-    private fun generateUniqueClassCode(): String {
-        val chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-        return (1..6).map { chars.random() }.joinToString("")
+    private fun sendPendingCountToWatch(count: Int) {
+        Log.d(TAG, "Intentando enviar conteo al reloj: $count")
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                // Buscamos los nodos (relojes) conectados
+                val nodes = Wearable.getNodeClient(applicationContext).connectedNodes.await()
+                nodes.forEach { node ->
+                    // Definimos un "path" o canal para este tipo de mensaje
+                    val path = "/pending_questions_count"
+                    // Convertimos el conteo a bytes para poder enviarlo
+                    val payload = count.toString().toByteArray()
+
+                    // Enviamos el mensaje
+                    Wearable.getMessageClient(applicationContext).sendMessage(
+                        node.id,
+                        path,
+                        payload
+                    ).await()
+                    Log.d(TAG, "Conteo enviado exitosamente al nodo: ${node.displayName}")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error al enviar el conteo al reloj", e)
+            }
+        }
     }
 
     private fun approveQuestion(pregunta: Pregunta) {
