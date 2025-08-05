@@ -28,6 +28,13 @@
             android:name="com.google.android.wearable.capabilities"
             android:resource="@xml/wear" />
 
+        <meta-data
+            android:name="com.google.android.wearable.requiredAppVersion"
+            android:value="1" />
+        <meta-data
+            android:name="com.google.android.wearable.bridgelessDismissalEnabled"
+            android:value="true" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

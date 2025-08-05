@@ -1,5 +1,6 @@
 package com.example.asknon
 
+import ShakeDetector
 import android.graphics.Bitmap
 import android.content.Intent
 import android.graphics.Color
@@ -7,7 +8,6 @@ import android.os.Bundle
 import android.widget.*
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.compose.ui.geometry.isEmpty
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.firebase.auth.FirebaseAuth
@@ -19,13 +19,17 @@ import com.google.zxing.qrcode.QRCodeWriter
 import java.util.*
 import android.util.Log
 import com.google.android.gms.wearable.CapabilityClient
-import com.google.android.gms.wearable.Node
+import com.google.android.gms.wearable.MessageClient
+import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.Wearable
 import java.nio.charset.StandardCharsets
 import android.widget.Toast
-import com.google.android.gms.wearable.MessageClient
-import com.google.android.gms.wearable.MessageEvent
+import com.google.android.gms.wearable.NodeClient
 import com.google.firebase.firestore.WriteBatch
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 
 data class Pregunta(
     val id: String = "",
@@ -54,8 +58,6 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
 
     // Datos
     private var currentClassId: String = ""
-
-    // Datos
     private val pendingQuestions = mutableListOf<Pregunta>()
     private val approvedQuestions = mutableListOf<Pregunta>()
 
@@ -63,42 +65,50 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
     private lateinit var pendingAdapter: QuestionActionAdapter
     private lateinit var approvedAdapter: PreguntaAdapter
 
+    private val messageClient: MessageClient by lazy { Wearable.getMessageClient(this) }
+    private val nodeClient: NodeClient by lazy { Wearable.getNodeClient(this) }
+    private val capabilityClient: CapabilityClient by lazy { Wearable.getCapabilityClient(this) }
+
+    private lateinit var sensorManager: SensorManager
+    private var accelerometer: Sensor? = null
+    private lateinit var shakeDetector: ShakeDetector
+
     companion object {
-        private const val TAG_MOBILE = "TeacherClassActivity" // Para logs
+        private const val TAG = "TeacherClassActivity"
         private const val PENDING_QUESTIONS_PATH = "/pending_questions_count"
-        // Esta es una "capacidad" que declararás en el AndroidManifest.xml de tu app Wear OS
-        // y en el archivo wear.xml de tu app móvil.
         private const val APPROVE_ALL_QUESTIONS_PATH = "/approve_all_questions"
         private const val WEAR_APP_CAPABILITY = "asknon_wear_app_capability"
-        // Constante para identificar si estamos en modo debug
-        private const val IS_DEBUG_MODE = true // Cambia a false para producción
     }
 
     override fun onResume() {
         super.onResume()
-        // Registrar listener para mensajes de Wear OS
-        Wearable.getMessageClient(this).addListener(this)
-        Log.d(TAG_MOBILE, "MessageListener para Wear OS registrado.")
+        messageClient.addListener(this)
+        Log.d(TAG, "MessageListener registrado")
+
+        // --- Nuevo código para el detector de agitación ---
+        accelerometer?.let {
+            sensorManager.registerListener(shakeDetector, it, SensorManager.SENSOR_DELAY_NORMAL)
+        }
+        // --- Fin del nuevo código ---
     }
 
     override fun onPause() {
         super.onPause()
-        // Desregistrar listener
-        Wearable.getMessageClient(this).removeListener(this)
-        Log.d(TAG_MOBILE, "MessageListener para Wear OS desregistrado.")
+        messageClient.removeListener(this)
+        Log.d(TAG, "MessageListener desregistrado")
+
+        // --- Nuevo código para el detector de agitación ---
+        sensorManager.unregisterListener(shakeDetector)
+        // --- Fin del nuevo código ---
     }
 
-    // Implementación de MessageClient.OnMessageReceivedListener
     override fun onMessageReceived(messageEvent: MessageEvent) {
-        Log.d(TAG_MOBILE, "Mensaje recibido desde Wear OS: ${messageEvent.path}")
+        Log.d(TAG, "Mensaje recibido: ${messageEvent.path}")
         when (messageEvent.path) {
             APPROVE_ALL_QUESTIONS_PATH -> {
-                val messageData = String(messageEvent.data) // Opcional, si envías datos
-                Log.d(TAG_MOBILE, "Recibido comando para aprobar todas las preguntas. Datos: $messageData")
-                approveAllPendingQuestionsInFirestore()
-            }
-            else -> {
-                Log.w(TAG_MOBILE, "Path desconocido desde Wear OS: ${messageEvent.path}")
+                runOnUiThread {
+                    approveAllPendingQuestionsInFirestore()
+                }
             }
         }
     }
@@ -106,9 +116,21 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_class_teacher)
+
         initViews()
         setupAdapters()
         checkExistingClass()
+
+        // --- Nuevo código para el detector de agitación ---
+        sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
+        accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+
+        shakeDetector = ShakeDetector {
+            // Acción al agitar el teléfono
+            Log.d(TAG, "Teléfono agitado! Aprobando preguntas.")
+            approveAllPendingQuestionsInFirestore()
+        }
+        // --- Fin del nuevo código ---
     }
 
     private fun initViews() {
@@ -118,6 +140,7 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
         rvApproved = findViewById(R.id.rv_approved_questions)
         btnProject = findViewById(R.id.btn_project_tv)
         btnDeleteClass = findViewById(R.id.btn_delete_class)
+
         btnProject.setOnClickListener { projectFirstQuestion() }
         btnDeleteClass.setOnClickListener { showDeleteClassConfirmation() }
     }
@@ -129,13 +152,16 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
             onAnswer = { question -> showAnswerDialog(question) },
             onReject = { question -> rejectQuestion(question) }
         )
+
         approvedAdapter = PreguntaAdapter(approvedQuestions) { question ->
             deleteAnsweredQuestion(question)
         }
+
         rvPending.apply {
             layoutManager = LinearLayoutManager(this@TeacherClassActivity)
             adapter = pendingAdapter
         }
+
         rvApproved.apply {
             layoutManager = LinearLayoutManager(this@TeacherClassActivity)
             adapter = approvedAdapter
@@ -144,47 +170,38 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
 
     private fun approveAllPendingQuestionsInFirestore() {
         if (currentClassId.isEmpty()) {
-            Toast.makeText(this, "ID de clase no disponible.", Toast.LENGTH_SHORT).show()
-            Log.w(TAG_MOBILE, "approveAll: currentClassId está vacío.")
+            Toast.makeText(this, "ID de clase no disponible", Toast.LENGTH_SHORT).show()
             return
         }
-        Log.d(TAG_MOBILE, "Intentando aprobar todas las preguntas pendientes para la clase: $currentClassId")
+
         db.collection("preguntas")
             .whereEqualTo("claseId", currentClassId)
-            .whereEqualTo("estado", "pendiente") // Solo seleccionar las pendientes
+            .whereEqualTo("estado", "pendiente")
             .get()
             .addOnSuccessListener { snapshot ->
                 if (snapshot.isEmpty) {
-                    Toast.makeText(this, "No hay preguntas pendientes para aprobar.", Toast.LENGTH_SHORT).show()
-                    Log.d(TAG_MOBILE, "No hay preguntas pendientes en Firestore para la clase $currentClassId.")
-                    // Aún así, es bueno enviar el conteo 0 al reloj,
-                    // aunque setupQuestionsListener debería manejarlo.
+                    Toast.makeText(this, "No hay preguntas pendientes", Toast.LENGTH_SHORT).show()
                     sendPendingQuestionsCountToWear(0)
                     return@addOnSuccessListener
                 }
-                val batch: WriteBatch = db.batch()
+
+                val batch = db.batch()
                 snapshot.documents.forEach { doc ->
-                    Log.d(TAG_MOBILE, "Aprobando pregunta ID: ${doc.id}")
                     batch.update(doc.reference, "estado", "aprobada")
                 }
+
                 batch.commit()
                     .addOnSuccessListener {
-                        Log.d(TAG_MOBILE, "Todas las preguntas pendientes (${snapshot.size()}) han sido aprobadas en Firestore.")
-                        Toast.makeText(this, "Todas las preguntas pendientes aprobadas (desde reloj).", Toast.LENGTH_LONG).show()
-                        // Tu setupQuestionsListener existente debería detectar este cambio,
-                        // actualizar la UI del móvil, y llamar a sendPendingQuestionsCountToWear()
-                        // enviando '0' al reloj automáticamente.
-                        // Si quieres forzar un envío inmediato por si acaso:
-                        // sendPendingQuestionsCountToWear(0)
+                        Toast.makeText(this, "Todas las preguntas aprobadas", Toast.LENGTH_SHORT).show()
                     }
                     .addOnFailureListener { e ->
-                        Log.e(TAG_MOBILE, "Error al ejecutar batch para aprobar todas las preguntas", e)
-                        Toast.makeText(this, "Error al aprobar todas las preguntas.", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, "Error al aprobar preguntas", Toast.LENGTH_SHORT).show()
+                        Log.e(TAG, "Error en batch", e)
                     }
             }
             .addOnFailureListener { e ->
-                Log.e(TAG_MOBILE, "Error al obtener preguntas pendientes para aprobar todo", e)
-                Toast.makeText(this, "Error al obtener preguntas pendientes.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Error al obtener preguntas", Toast.LENGTH_SHORT).show()
+                Log.e(TAG, "Error al obtener preguntas", e)
             }
     }
 
@@ -193,6 +210,7 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
             finish()
             return
         }
+
         db.collection("clases")
             .whereEqualTo("profesorId", userId)
             .limit(1)
@@ -204,7 +222,7 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
                     val clase = snapshot.documents[0]
                     currentClassId = clase.id
                     setupClassInfo(clase.getString("codigo") ?: "", clase.getString("qrCode") ?: "")
-                    setupQuestionsListener() // Mover aquí para asegurar que currentClassId está seteado
+                    setupQuestionsListener()
                 }
             }
             .addOnFailureListener {
@@ -217,18 +235,20 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
         val classId = UUID.randomUUID().toString()
         val classCode = generateUniqueClassCode()
         val qrContent = "ASK_NON_CLASS_$classId"
+
         val nuevaClase = hashMapOf(
             "codigo" to classCode,
             "qrCode" to qrContent,
             "profesorId" to profesorId,
             "fechaCreacion" to Calendar.getInstance().time
         )
+
         db.collection("clases").document(classId)
             .set(nuevaClase)
             .addOnSuccessListener {
                 currentClassId = classId
                 setupClassInfo(classCode, qrContent)
-                setupQuestionsListener() // Mover aquí para asegurar que currentClassId está seteado
+                setupQuestionsListener()
                 Toast.makeText(this, "Clase creada exitosamente", Toast.LENGTH_SHORT).show()
             }
             .addOnFailureListener {
@@ -238,7 +258,7 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
     }
 
     private fun setupClassInfo(classCode: String, qrContent: String) {
-        tvClassCode.text = "Código: $classCode\nID: $currentClassId" // Mostrar también el ID
+        tvClassCode.text = "Código: $classCode"
         generateQrImage(qrContent)
     }
 
@@ -249,11 +269,13 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
             val width = bitMatrix.width
             val height = bitMatrix.height
             val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
+
             for (x in 0 until width) {
                 for (y in 0 until height) {
                     bmp.setPixel(x, y, if (bitMatrix[x, y]) Color.BLACK else Color.WHITE)
                 }
             }
+
             imgQr.setImageBitmap(bmp)
         } catch (e: WriterException) {
             Toast.makeText(this, "Error al generar QR", Toast.LENGTH_SHORT).show()
@@ -261,32 +283,58 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
     }
 
     private fun setupQuestionsListener() {
-        if (currentClassId.isEmpty()) return // No escuchar si no hay clase
+        if (currentClassId.isEmpty()) return
+
         questionsListener = db.collection("preguntas")
             .whereEqualTo("claseId", currentClassId)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    Log.e(TAG_MOBILE, "Error al cargar preguntas", error)
-                    Toast.makeText(this, "Error al cargar preguntas", Toast.LENGTH_SHORT).show()
+                    Log.e(TAG, "Error al cargar preguntas", error)
                     return@addSnapshotListener
                 }
+
                 val newPendingQuestions = mutableListOf<Pregunta>()
                 val newApprovedQuestions = mutableListOf<Pregunta>()
+
                 snapshot?.documents?.forEach { doc ->
-                    val preguntaData = doc.toObject(Pregunta::class.java)
-                    if (preguntaData != null) {
-                        val preguntaConIdCorrecto = preguntaData.copy(id = doc.id)
-                        when (preguntaConIdCorrecto.estado) {
-                            "pendiente" -> newPendingQuestions.add(preguntaConIdCorrecto)
-                            "aprobada" -> newApprovedQuestions.add(preguntaConIdCorrecto)
+                    val pregunta = doc.toObject(Pregunta::class.java)?.copy(id = doc.id)
+                    pregunta?.let {
+                        when (it.estado) {
+                            "pendiente" -> newPendingQuestions.add(it)
+                            "aprobada" -> newApprovedQuestions.add(it)
                         }
                     }
                 }
-                // Actualizar los adaptadores con los nuevos datos
+
                 pendingAdapter.updateData(newPendingQuestions)
                 approvedAdapter.updateData(newApprovedQuestions)
-                // <<--- AQUÍ ES DONDE ENVIAREMOS LOS DATOS A WEAR OS --- >>
                 sendPendingQuestionsCountToWear(newPendingQuestions.size)
+            }
+    }
+
+    private fun sendPendingQuestionsCountToWear(count: Int) {
+        capabilityClient.getCapability("asknon_wear_app_capability", CapabilityClient.FILTER_REACHABLE)
+            .addOnSuccessListener { capabilityInfo ->
+                val nodes = capabilityInfo.nodes
+                if (nodes.isNotEmpty()) {
+                    val messageData = count.toString().toByteArray(StandardCharsets.UTF_8)
+
+                    nodes.forEach { node ->
+                        messageClient.sendMessage(
+                            node.id,
+                            PENDING_QUESTIONS_PATH,
+                            messageData
+                        ).addOnSuccessListener {
+                            Log.d(TAG, "Conteo enviado a ${node.displayName}")
+                        }.addOnFailureListener { e ->
+                            Log.e(TAG, "Error al enviar a ${node.displayName}", e)
+                        }
+                    }
+                } else {
+                    Log.w(TAG, "No se encontró un nodo con la capacidad de Wear OS")
+                }
+            }.addOnFailureListener { e ->
+                Log.e(TAG, "Error al obtener capacidades de Wear OS", e)
             }
     }
 
@@ -306,37 +354,6 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
             }
     }
 
-    private fun sendPendingQuestionsCountToWear(count: Int) {
-        val messageData = count.toString().toByteArray(StandardCharsets.UTF_8)
-        // Usar CapabilityClient para encontrar nodos que tengan tu app Wear OS instalada
-        val capabilityInfoTask = com.google.android.gms.wearable.Wearable.getCapabilityClient(this)
-            .getCapability(WEAR_APP_CAPABILITY, com.google.android.gms.wearable.CapabilityClient.FILTER_REACHABLE)
-        capabilityInfoTask.addOnSuccessListener { capabilityInfo ->
-            val connectedNodes = capabilityInfo.nodes
-            if (connectedNodes.isEmpty()) {
-                Log.d(TAG_MOBILE, "No hay dispositivos Wear OS conectados/alcanzables con la capacidad.")
-                // Opcional: Toast.makeText(this, "Wear OS no conectado", Toast.LENGTH_SHORT).show()
-            } else {
-                connectedNodes.forEach { node ->
-                    sendMessageToNode(node.id, PENDING_QUESTIONS_PATH, messageData)
-                }
-            }
-        }
-        capabilityInfoTask.addOnFailureListener { exception ->
-            Log.e(TAG_MOBILE, "Error al obtener nodos con capacidad: $exception")
-        }
-    }
-
-    private fun sendMessageToNode(nodeId: String, path: String, data: ByteArray) {
-        com.google.android.gms.wearable.Wearable.getMessageClient(this).sendMessage(nodeId, path, data)
-            .addOnSuccessListener {
-                Log.d(TAG_MOBILE, "Mensaje enviado a $nodeId con éxito. Path: $path")
-            }
-            .addOnFailureListener { exception ->
-                Log.e(TAG_MOBILE, "Error al enviar mensaje a $nodeId. Path: $path. Error: $exception")
-            }
-    }
-
     private fun rejectQuestion(pregunta: Pregunta) {
         db.collection("preguntas").document(pregunta.id)
             .delete()
@@ -352,6 +369,7 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
         val input = EditText(this).apply {
             hint = "Escribe tu respuesta"
         }
+
         AlertDialog.Builder(this)
             .setTitle("Responder pregunta")
             .setMessage(pregunta.texto)
@@ -395,70 +413,18 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
 
     private fun projectFirstQuestion() {
         if (approvedQuestions.isNotEmpty()) {
-            // Verificar que currentClassId no esté vacío
             if (currentClassId.isEmpty()) {
                 Toast.makeText(this, "ID de clase no disponible", Toast.LENGTH_SHORT).show()
                 return
             }
 
-            // En lugar de intentar lanzar la app de TV, simplemente muestra un mensaje
-            // indicando que la TV debería estar conectada y escuchando.
             Toast.makeText(
                 this,
                 "Pregunta aprobada. Asegúrate de que la TV esté conectada al código: $currentClassId",
-                Toast.LENGTH_LONG // Mensaje más largo para que se entienda
+                Toast.LENGTH_LONG
             ).show()
-
-            // Opcional: Si quieres mantener la lógica de intento de lanzamiento como fallback:
-            /*
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                setClassName("com.example.asknontv", "com.example.asknontv.ProjectionActivity")
-                putExtra("CLASS_ID", currentClassId)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            try {
-                startActivity(intent)
-                Toast.makeText(this, "Intentando abrir la TV...", Toast.LENGTH_SHORT).show()
-            } catch (e: Exception) {
-                Log.w(TAG_MOBILE, "No se pudo lanzar la app de TV automáticamente. Asumiendo que está abierta.", e)
-                Toast.makeText(
-                    this,
-                    "Asegúrate de que la TV esté conectada al código: $currentClassId",
-                    Toast.LENGTH_LONG
-                ).show()
-            }
-            */
-
         } else {
             Toast.makeText(this, "No hay preguntas aprobadas", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private fun projectToTvForTesting() {
-        // Para pruebas en emulador
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setClassName("com.example.asknontv", "com.example.asknontv.ProjectionActivity")
-            putExtra("CLASS_ID", currentClassId)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-
-        // Para emulador, intenta lanzar aunque falle
-        try {
-            startActivity(intent)
-            Toast.makeText(this, "Proyectando en TV (emulador)", Toast.LENGTH_SHORT).show()
-        } catch (e: Exception) {
-            // Si falla, abre la app de TV de otra manera
-            val genericIntent = Intent().apply {
-                `package` = "com.example.asknontv"
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            try {
-                startActivity(genericIntent)
-                Toast.makeText(this, "App de TV abierta (verifica el CLASS_ID: $currentClassId)", Toast.LENGTH_LONG).show()
-            } catch (e2: Exception) {
-                Toast.makeText(this, "Instala la app de TV para proyectar. CLASS_ID: $currentClassId", Toast.LENGTH_LONG).show()
-                Log.e("TeacherClassActivity", "Error al lanzar app de TV", e)
-            }
         }
     }
 
@@ -478,7 +444,7 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
             Toast.makeText(this, "No hay clase para eliminar", Toast.LENGTH_SHORT).show()
             return
         }
-        // Primero eliminamos todas las preguntas asociadas a la clase
+
         db.collection("preguntas")
             .whereEqualTo("claseId", currentClassId)
             .get()
@@ -487,10 +453,9 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
                 questionsSnapshot.documents.forEach { doc ->
                     batch.delete(doc.reference)
                 }
+
                 batch.commit()
                     .addOnSuccessListener {
-                        // Si la eliminación de preguntas fue exitosa (o no había preguntas),
-                        // procedemos a eliminar la clase
                         db.collection("clases").document(currentClassId)
                             .delete()
                             .addOnSuccessListener {
@@ -502,25 +467,21 @@ class TeacherClassActivity : AppCompatActivity(), MessageClient.OnMessageReceive
                             }
                     }
                     .addOnFailureListener { e ->
-                        Toast.makeText(this, "Error al eliminar las preguntas de la clase: ${e.message}", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, "Error al eliminar las preguntas: ${e.message}", Toast.LENGTH_SHORT).show()
                     }
             }
             .addOnFailureListener { e ->
-                Toast.makeText(this, "Error al obtener las preguntas para eliminar: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Error al obtener preguntas: ${e.message}", Toast.LENGTH_SHORT).show()
             }
     }
 
     private fun logoutAndGoToMain() {
-        auth.signOut() // Cierra la sesión del usuario en Firebase Authentication
-        // Crea un Intent para ir a MainActivity
+        auth.signOut()
         val intent = Intent(this, MainActivity::class.java).apply {
-            // Estas flags limpian el stack de actividades para que el usuario
-            // no pueda volver a TeacherClassActivity presionando "atrás"
-            // y aseguran que MainActivity sea la nueva tarea raíz.
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
         startActivity(intent)
-        finish() // Cierra TeacherClassActivity
+        finish()
     }
 
     override fun onDestroy() {

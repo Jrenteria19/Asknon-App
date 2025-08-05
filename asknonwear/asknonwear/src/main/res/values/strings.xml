@@ -1,0 +1,22 @@
+<resources>
+    <string name="app_name">asknonwear</string>
+    <!--
+    This string is used for square devices and overridden by hello_world in
+    values-round/strings.xml for round devices.
+    -->
+    <string name="hello_world">From the Square world,\nHello, %1$s!</string>
+    <string name="tile_label">Example tile</string>
+    <string name="complication_label">Example complication</string>
+
+    <string name="pending_questions_format">Pendientes: %d</string>
+    <string name="new_pending_questions">%d nuevas preguntas pendientes</string>
+    <string name="approving_questions">Aprobando %d preguntas…</string>
+    <string name="approval_failed">Error al aprobar</string>
+    <string name="no_device_connected">No hay dispositivo móvil conectado</string>
+    <string name="connection_error">Error de conexión</string>
+
+    <!-- Colors -->
+    <color name="colorPrimary">#4CAF50</color>
+    <color name="colorDisabled">#9E9E9E</color>
+    <color name="textColorPrimary">#212121</color>
+</resources>
