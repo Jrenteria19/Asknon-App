@@ -1,5 +1,6 @@
 package com.example.asknon
 
+import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -13,9 +14,6 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import java.util.*
 
-// Reutilizamos la misma clase Pregunta de TeacherClassActivity
-// data class Pregunta(...)
-
 class StudentClassActivity : AppCompatActivity() {
 
     private lateinit var rvQuestions: RecyclerView
@@ -26,26 +24,24 @@ class StudentClassActivity : AppCompatActivity() {
     // Firebase
     private val auth = FirebaseAuth.getInstance()
     private val db = FirebaseFirestore.getInstance()
+    // Dos listeners: uno para las preguntas y otro para el estado de la clase
     private var questionsListener: ListenerRegistration? = null
+    private var classListener: ListenerRegistration? = null
 
     // Datos del estudiante y la clase actual
     private var currentStudentId: String = ""
-    private var currentClassId: String = "" // Necesitaremos obtener este ID, por ejemplo, del código QR escaneado
-    // o pasado desde otra actividad. Por ahora, lo dejaremos vacío.
+    private var currentClassId: String = ""
 
     // Adaptador
-    private lateinit var adapter: StudentQuestionAdapter // Cambiado a un adaptador específico para estudiantes
-    private val questionList = mutableListOf<Pregunta>() // Lista local de objetos Pregunta
+    private lateinit var adapter: StudentQuestionAdapter
+    private val questionList = mutableListOf<Pregunta>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_class_student)
 
-        // **IMPORTANTE**: Necesitas una forma de obtener el 'classId' y el 'studentId' (uid del usuario actual)
-        // Por ahora, asumiremos que 'classId' se pasa como un extra en el Intent
         currentClassId = intent.getStringExtra("CLASS_ID") ?: ""
 
-        // Si no tenemos un CLASS_ID, no podemos continuar.
         if (currentClassId.isEmpty()) {
             Toast.makeText(this, "Error: No se ha proporcionado un ID de clase.", Toast.LENGTH_LONG).show()
             finish()
@@ -60,7 +56,9 @@ class StudentClassActivity : AppCompatActivity() {
 
         initViews()
         setupRecyclerView()
-        setupQuestionsListener() // Inicia el listener para recibir actualizaciones de preguntas
+        // Iniciamos ambos listeners
+        setupQuestionsListener()
+        setupClassListener() // <-- NUEVO: Listener para detectar si la clase se elimina
     }
 
     private fun initViews() {
@@ -69,7 +67,6 @@ class StudentClassActivity : AppCompatActivity() {
         tiInputLayout = findViewById(R.id.ti_question_input)
         btnSend = findViewById(R.id.btn_send_question)
 
-        // Acción del botón "Enviar"
         btnSend.setOnClickListener {
             sendQuestion()
         }
@@ -88,24 +85,21 @@ class StudentClassActivity : AppCompatActivity() {
             tiInputLayout.error = "La pregunta no puede estar vacía"
             return
         }
-
         if (text.length < 5) {
             tiInputLayout.error = "Escribe una pregunta más completa"
             return
         }
-
-        tiInputLayout.error = null // Limpia el error visual
+        tiInputLayout.error = null
 
         val newQuestion = Pregunta(
-            id = UUID.randomUUID().toString(), // Genera un ID único para la pregunta
+            id = UUID.randomUUID().toString(),
             texto = text,
-            estado = "pendiente", // Las preguntas de los estudiantes inician como pendientes
+            estado = "pendiente",
             claseId = currentClassId,
             estudianteId = currentStudentId,
             fechaCreacion = Calendar.getInstance().time
         )
 
-        // Guarda la pregunta en Firestore
         db.collection("preguntas").document(newQuestion.id)
             .set(newQuestion)
             .addOnSuccessListener {
@@ -129,34 +123,66 @@ class StudentClassActivity : AppCompatActivity() {
 
                 val updatedQuestions = mutableListOf<Pregunta>()
                 snapshot?.documents?.forEach { doc ->
-                    val preguntaOriginal = doc.toObject(Pregunta::class.java)
-                    if (preguntaOriginal != null) {
-                        // Crea una nueva instancia de Pregunta con el id del documento
-                        val preguntaConIdCorrecto = preguntaOriginal.copy(id = doc.id)
-                        updatedQuestions.add(preguntaConIdCorrecto)
+                    doc.toObject(Pregunta::class.java)?.let {
+                        updatedQuestions.add(it.copy(id = doc.id))
                     }
                 }
 
-                // Ordena las preguntas por fecha de creación (las más recientes primero)
                 updatedQuestions.sortByDescending { it.fechaCreacion }
+                questionList.clear()
+                questionList.addAll(updatedQuestions)
+                adapter.notifyDataSetChanged()
 
-                // Actualiza el adaptador
-                // Asegúrate que tu adaptador tiene un método como updateData o que puedes reasignar la lista
-                // y luego llamar a notifyDataSetChanged()
-                questionList.clear() // Limpia la lista antigua
-                questionList.addAll(updatedQuestions) // Añade las nuevas preguntas
-                adapter.notifyDataSetChanged() // Notifica al adaptador
-
-
-                if (updatedQuestions.isNotEmpty() && (questionList.isEmpty() ||
-                            (questionList.isNotEmpty() && updatedQuestions.first().id != questionList.first().id))) {
+                if (updatedQuestions.isNotEmpty() && (rvQuestions.layoutManager as LinearLayoutManager).findFirstVisibleItemPosition() != 0) {
                     rvQuestions.scrollToPosition(0)
                 }
             }
     }
 
+    /**
+     * NUEVO: Listener que vigila el documento de la clase. Si el documento
+     * es eliminado, significa que el profesor terminó la clase y debemos
+     * redirigir al estudiante.
+     */
+    private fun setupClassListener() {
+        // Aseguramos que tenemos un ID de clase antes de escuchar
+        if (currentClassId.isEmpty()) return
+
+        classListener = db.collection("clases").document(currentClassId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    // Podríamos ignorar este error para no molestar al usuario,
+                    // ya que la funcionalidad principal sigue siendo la de las preguntas.
+                    // Opcionalmente, registrar el error.
+                    return@addSnapshotListener
+                }
+
+                // Si el snapshot no existe, la clase fue eliminada.
+                if (snapshot == null || !snapshot.exists()) {
+                    // Detenemos los listeners para no seguir trabajando en segundo plano
+                    classListener?.remove()
+                    questionsListener?.remove()
+
+                    Toast.makeText(this, "La clase ha sido cerrada por el profesor.", Toast.LENGTH_LONG).show()
+
+                    // Creamos un Intent para ir a la actividad de unirse a una clase
+                    // Reemplaza 'JoinClassActivity::class.java' por la actividad correcta
+                    val intent = Intent(this, JoinClassActivity::class.java).apply {
+                        // Limpiamos el historial de actividades para que el usuario no pueda
+                        // volver a esta pantalla con el botón "atrás".
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                    }
+                    startActivity(intent)
+                    finish() // Cierra esta actividad
+                }
+            }
+    }
+
+
     override fun onDestroy() {
         super.onDestroy()
-        questionsListener?.remove() // Detener el listener cuando la actividad se destruye
+        // Detenemos ambos listeners cuando la actividad se destruye
+        questionsListener?.remove()
+        classListener?.remove()
     }
 }

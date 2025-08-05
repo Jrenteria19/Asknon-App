@@ -44,21 +44,6 @@
                 android:layout_height="wrap_content" />
         </com.google.android.material.textfield.TextInputLayout>
 
-        <!-- Botón de escanear QR (estilo outlined) -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_scan_qr"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Escanear QR"
-            android:layout_marginBottom="16dp"
-            android:icon="@drawable/ic_qr_code"
-            app:iconGravity="textStart"
-            app:iconPadding="12dp"
-            android:textColor="@color/colorPrimary"
-            app:strokeWidth="2dp"
-            app:strokeColor="@color/colorPrimary"
-            app:iconTint="@color/colorPrimary"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
 
         <!-- Botón de entrar (estilo contenido, color primario) -->
         <com.google.android.material.button.MaterialButton

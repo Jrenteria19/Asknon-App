@@ -16,14 +16,6 @@
         android:gravity="center_vertical"
         android:layout_marginBottom="12dp">
 
-        <ImageView
-            android:id="@+id/img_qr"
-            android:layout_width="100dp"
-            android:layout_height="100dp"
-            android:src="@drawable/qr"
-            android:contentDescription="Código QR"
-            android:layout_marginEnd="16dp" />
-
         <TextView
             android:id="@+id/tv_class_code"
             android:layout_width="wrap_content"
